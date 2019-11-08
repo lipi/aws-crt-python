@@ -11,6 +11,7 @@
 # express or implied. See the License for the specific language governing
 # permissions and limitations under the License.
 
+import _awscrt
 from sys import version_info
 from weakref import WeakSet
 
@@ -52,3 +53,30 @@ def isinstance_str(x):
     if version_info[0] == 2:
         return isinstance(x, basestring)
     return isinstance(x, str)
+
+def native_memory():
+    """
+    Returns number of bytes currently allocated by awscrt's native code.
+
+    AWS_CRT_MEMORY_TRACING environment variable must be set before module
+    is loaded, or 0 will always be returned. Legal values are:
+
+    AWS_CRT_MEMORY_TRACING=0  # no tracing
+    AWS_CRT_MEMORY_TRACING=1  # just track allocation sizes and total allocated
+    AWS_CRT_MEMORY_TRACING=2  # capture callstacks for each allocation
+    """
+    return _awscrt.native_memory()
+
+def native_memory_dump():
+    """
+    If there are outstanding allocations from awscrt's native code, dump them
+    to log, along with any information gathered based on the tracing level.
+
+    In order to see the dump, logging must initialized at LogLevel.Trace.
+    Also, the AWS_CRT_MEMORY_TRACING environment variable must be non-zero
+    when module is loaded. Legal values are:
+    AWS_CRT_MEMORY_TRACING=0  # no tracing
+    AWS_CRT_MEMORY_TRACING=1  # just track allocation sizes and total allocated
+    AWS_CRT_MEMORY_TRACING=2  # capture callstacks for each allocation
+    """
+    return _awscrt.native_memory_dump()

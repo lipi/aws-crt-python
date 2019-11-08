@@ -12,9 +12,10 @@
 # permissions and limitations under the License.
 
 from __future__ import absolute_import
-from awscrt.io import ClientBootstrap, ClientTlsContext, DefaultHostResolver, EventLoopGroup, TlsConnectionOptions, TlsContextOptions
 from test import NativeResourceTest
 import unittest
+
+from awscrt.io import ClientBootstrap, ClientTlsContext, DefaultHostResolver, EventLoopGroup, TlsConnectionOptions, TlsContextOptions
 
 
 class EventLoopGroupTest(NativeResourceTest):

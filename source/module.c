@@ -23,6 +23,7 @@
 
 #include <aws/auth/auth.h>
 #include <aws/common/byte_buf.h>
+#include <aws/common/environment.h>
 #include <aws/http/http.h>
 #include <aws/io/io.h>
 #include <aws/io/logging.h>
@@ -43,7 +44,9 @@ PyObject *aws_py_init_logging(PyObject *self, PyObject *args) {
 
     s_logger_init = true;
 
-    struct aws_allocator *allocator = aws_py_get_allocator();
+    /* NOTE: We are NOT using aws_py_default_allocator().
+     * This avoid deadlock during aws_mem_tracer_dump() */
+    struct aws_allocator *allocator = aws_default_allocator();
 
     int log_level = 0;
     const char *file_path = NULL;
@@ -167,7 +170,7 @@ static void s_py_to_aws_error_map_init(void) {
 
     if (aws_hash_table_init(
             &s_py_to_aws_error_map,
-            aws_py_get_allocator(),
+            aws_default_allocator(), /* non-tracing allocator so this doesn't show up in leak dumps */
             AWS_ARRAY_SIZE(s_py_to_aws_error_array),
             aws_hash_ptr,
             aws_ptr_eq,
@@ -230,9 +233,53 @@ PyObject *aws_py_memory_view_from_byte_buffer(struct aws_byte_buf *buf) {
 /*******************************************************************************
  * Allocator
  ******************************************************************************/
+AWS_STATIC_STRING_FROM_LITERAL(s_mem_tracing_env_var, "AWS_CRT_MEMORY_TRACING");
+static struct aws_allocator *s_allocator = NULL;
 
 struct aws_allocator *aws_py_get_allocator(void) {
-    return aws_default_allocator();
+    if (AWS_UNLIKELY(s_allocator == NULL)) {
+        struct aws_string *value = NULL;
+        if (aws_get_environment_value(aws_default_allocator(), s_mem_tracing_env_var, &value) || value == NULL) {
+            return s_allocator = aws_default_allocator();
+        }
+
+        int level = atoi(aws_string_c_str(value));
+        if (level < AWS_MEMTRACE_NONE || level > AWS_MEMTRACE_STACKS) {
+            /* this can't go through logging, because it happens before logging is set up */
+            fprintf(
+                stderr,
+                "AWS_CRT_MEMORY_TRACING is set to invalid value: %s, must be 0 (none), 1 (bytes), or 2 (stacks)",
+                aws_string_bytes(value));
+            level = AWS_MEMTRACE_NONE;
+        }
+        s_allocator = aws_mem_tracer_new(aws_default_allocator(), NULL, level, 16);
+    }
+    return s_allocator;
+}
+
+PyObject *aws_py_native_memory(PyObject *self, PyObject *args) {
+    (void)self;
+    (void)args;
+
+    size_t bytes = 0;
+    struct aws_allocator *alloc = aws_py_get_allocator();
+    if (alloc != aws_default_allocator()) {
+        bytes = aws_mem_tracer_bytes(alloc);
+    }
+
+    return PyLong_FromSize_t(bytes);
+}
+
+PyObject *aws_py_native_memory_dump(PyObject *self, PyObject *args) {
+    (void)self;
+    (void)args;
+
+    struct aws_allocator *alloc = aws_py_get_allocator();
+    if (alloc != aws_default_allocator()) {
+        aws_mem_tracer_dump(alloc);
+    }
+
+    Py_RETURN_NONE;
 }
 
 /*******************************************************************************
@@ -243,6 +290,10 @@ struct aws_allocator *aws_py_get_allocator(void) {
     { #NAME, aws_py_##NAME, (FLAGS), NULL }
 
 static PyMethodDef s_module_methods[] = {
+    /* CRT */
+    AWS_PY_METHOD_DEF(native_memory, METH_NOARGS),
+    AWS_PY_METHOD_DEF(native_memory_dump, METH_NOARGS),
+
     /* IO */
     AWS_PY_METHOD_DEF(is_alpn_available, METH_NOARGS),
     AWS_PY_METHOD_DEF(event_loop_group_new, METH_VARARGS),
@@ -339,9 +390,13 @@ PyMODINIT_FUNC INIT_FN(void) {
     (void)m;
 #endif /* PY_MAJOR_VERSION */
 
-    aws_http_library_init(aws_py_get_allocator());
-    aws_auth_library_init(aws_py_get_allocator());
-    aws_mqtt_library_init(aws_py_get_allocator());
+    /* Don't report this memory when dumping possible leaks.
+     * It's not possible to check for leaks after unloading our dependencies */
+    struct aws_allocator *nontracing_allocator = aws_default_allocator();
+
+    aws_http_library_init(nontracing_allocator);
+    aws_auth_library_init(nontracing_allocator);
+    aws_mqtt_library_init(nontracing_allocator);
 
     if (!PyEval_ThreadsInitialized()) {
         PyEval_InitThreads();

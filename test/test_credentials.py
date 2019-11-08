@@ -12,10 +12,11 @@
 # permissions and limitations under the License.
 
 from __future__ import absolute_import
-from awscrt.auth import Credentials, DefaultCredentialsProviderChain, StaticCredentialsProvider
-from awscrt.io import ClientBootstrap, EventLoopGroup
 import os
 from test import NativeResourceTest
+
+from awscrt.auth import Credentials, DefaultCredentialsProviderChain, StaticCredentialsProvider
+from awscrt.io import ClientBootstrap, EventLoopGroup
 
 EXAMPLE_ACCESS_KEY_ID = 'example_access_key_id'
 EXAMPLE_SECRET_ACCESS_KEY = 'example_secret_access_key'

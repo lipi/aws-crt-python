@@ -68,5 +68,7 @@ PyObject *aws_py_memory_view_from_byte_buffer(struct aws_byte_buf *buf);
 
 /* Allocator that calls into PyObject_[Malloc|Free|Realloc] */
 struct aws_allocator *aws_py_get_allocator(void);
+PyObject *aws_py_native_memory(PyObject *self, PyObject *args);
+PyObject *aws_py_native_memory_dump(PyObject *self, PyObject *args);
 
 #endif /* AWS_CRT_PYTHON_MODULE_H */

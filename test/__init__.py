@@ -11,11 +11,18 @@
 # express or implied. See the License for the specific language governing
 # permissions and limitations under the License.
 
+# Hacks to ensure that AWS_CRT_MEMORY_TRACING is turned on:
 from __future__ import print_function
-from awscrt import NativeResource
+import os
+import sys
+if '_awscrt' in sys.modules:
+    raise Exception('Must import test/__init__.py before anything from awscrt')
+os.environ['AWS_CRT_MEMORY_TRACING'] = '2'
+
+from awscrt import native_memory, native_memory_dump, NativeResource
+import awscrt.io
 import gc
 import inspect
-import sys
 import time
 import types
 import unittest
@@ -28,6 +35,7 @@ class NativeResourceTest(unittest.TestCase):
 
     def setUp(self):
         NativeResource._track_lifetime = True
+        awscrt.io.init_logging(awscrt.io.LogLevel.Trace, 'stderr')
 
     def tearDown(self):
         gc.collect()
@@ -72,3 +80,7 @@ class NativeResourceTest(unittest.TestCase):
                         print('  -', r)
 
         self.assertEqual(0, len(NativeResource._living))
+
+        # Check for native memory leaks
+        native_memory_dump()
+        self.assertEqual(0, native_memory())
