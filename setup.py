@@ -155,14 +155,18 @@ class awscrt_build_ext(setuptools.command.build_ext.build_ext):
             '-DS2N_NO_PQ_ASM=ON',
         ])
 
-        # FIXME: use environment variables - Lipi
-
         if self.include_dirs:
             cmake_args.append('-DCMAKE_INCLUDE_PATH={}'.format(';'.join(self.include_dirs)))
         if self.library_dirs:
             cmake_args.append('-DCMAKE_LIBRARY_PATH={}'.format(';'.join(self.library_dirs)))
         cmake_args.extend(aws_lib.extra_cmake_args)
         cmake_args.append(lib_source_dir)
+
+        # honour environment variables
+        keys = ['CMAKE_INCLUDE_PATH', 'CMAKE_LIBRARY_PATH']
+        for key in keys:
+            if key in os.environ.keys():
+                cmake_args.append('-D{}={}'.format(key, os.environ[key]))
 
         subprocess.check_call(cmake_args)
 
